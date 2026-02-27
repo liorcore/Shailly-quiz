@@ -11,11 +11,11 @@
     <style>
         body {
             font-family: 'Assistant', sans-serif;
-            overflow: hidden;
             background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 100%);
             height: 100vh;
             margin: 0;
             position: relative;
+            overflow: hidden;
         }
         
         .bg-mesh {
@@ -34,15 +34,18 @@
             top: 0;
             left: 0;
             width: 100%;
-            height: 100%;
+            height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding-top: 5vh;
+            padding-top: 4vh;
+            padding-bottom: 4vh;
             opacity: 0;
             visibility: hidden;
             z-index: 10;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         }
         .slide.active {
             opacity: 1;
@@ -94,6 +97,32 @@
             color: white !important;
         }
 
+        .disabled-option {
+            background-color: #e5e7eb !important;
+            border-color: #d1d5db !important;
+            color: #6b7280 !important;
+            cursor: not-allowed !important;
+            opacity: 0.8;
+        }
+
+        .color-strip {
+            width: 10px;
+            align-self: stretch;
+            border-radius: 999px;
+        }
+        .answer-color-green {
+            background-color: #22c55e;
+        }
+        .answer-color-blue {
+            background-color: #3b82f6;
+        }
+        .answer-color-red {
+            background-color: #ef4444;
+        }
+        .answer-color-yellow {
+            background-color: #eab308;
+        }
+
         .timer-container-inline {
             width: 100%;
             max-width: 600px;
@@ -134,14 +163,36 @@
 
         .gift-btn {
             background: white;
-            padding: 1.5rem;
+            padding: 1.2rem;
             border-radius: 1.5rem;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            font-size: 3.5rem;
+            font-size: 2.8rem;
             transition: all 0.2s;
             line-height: 1;
             z-index: 60;
             position: relative;
+        }
+
+        .question-image {
+            height: 50vh;
+        }
+
+        @media (max-width: 640px) {
+            .slide {
+                padding-top: 2vh;
+                padding-bottom: 2vh;
+            }
+            .question-image {
+                height: 34vh;
+            }
+            .option-btn {
+                padding: 0.75rem 1rem;
+                font-size: 1rem;
+            }
+            .timer-container-inline {
+                max-width: 90%;
+                height: 24px;
+            }
         }
     </style>
 </head>
@@ -198,6 +249,7 @@
             { question: "בת כמה אמא?", correct: "37", options: ["30", "27", "45", "37"], image: "photo1.png" },
             { question: "איזה תספורת הייתה לאמא כאשר הייתה ילדה?", correct: "פטריה", options: ["תלתלים", "קארה", "מקורזל", "פטריה"], image: "photo2.png" },
             { question: "מה היה שם המשפחה של אמא לפני החתונה?", correct: "טיבלום", options: ["קטוב", "לוי", "כהן", "טיבלום"], image: "photo3.png" },
+            { question: "מי בתמונה?", correct: "אמא שי-לי", options: ["אמא שי-לי", "דודה שקד", "דודה נועה", "סבתא מימי"], image: "photo31.png" },
             { question: "איך קוראים לבית הספר שאמא עובדת בו?", correct: "שיקמים", options: ["נגבה", "עדיני", "אמירים", "שיקמים"], image: "photo4.png" },
             { question: "איך קוראים לאמא של אמא שי-לי?", correct: "מיכל", options: ["אתי", "רבקה", "חנה", "מיכל"], image: "photo5.png" },
             { question: "איך קוראים לאבא של אמא?", correct: "צחי", options: ["שאול", "שבי", "רפי", "צחי"], image: "photo6.png" },
@@ -212,6 +264,12 @@
         let isProcessing = false;
         let timerTween = null;
         const TIME_LIMIT = 60;
+
+        // צלילים
+        const successSound = new Audio('success.mp3');
+        const wrongSound = new Audio('wrong.mp3');
+        const tickSound = new Audio('tick.mp3');
+        tickSound.loop = true;
 
         function init() {
             const container = document.getElementById('quiz-container');
@@ -230,18 +288,33 @@
                             <div id="timer-progress-${idx}" class="timer-bar"></div>
                         </div>
                     </div>
-                    <div class="w-full max-w-5xl px-4 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center mt-4">
-                        <div class="glass-card h-[24rem] md:h-[30rem] flex items-center justify-center text-gray-400 overflow-hidden relative border-4 border-white/50">
+                    <div class="w-full max-w-5xl px-4 grid grid-cols-1 lg:grid-cols-2 gap-6 items-center mt-2 md:mt-4">
+                        <div class="glass-card question-image flex items-center justify-center text-gray-400 overflow-hidden relative border-4 border-white/50">
                              <img src="${q.image}" alt="${q.question}" class="h-full w-auto object-contain mx-auto" onerror="this.style.display='none';">
                         </div>
                         <div class="grid grid-cols-1 gap-4">
-                            ${shuffledOptions.map(opt => `
-                                <button onclick="handleAnswer(this, '${opt.replace(/'/g, "\\'")}', '${q.correct.replace(/'/g, "\\'")}')" 
-                                        class="option-btn text-right p-5 rounded-2xl text-xl font-bold text-gray-700 shadow-sm">
-                                    ${opt}
-                                </button>
-                            `).join('')}
+                            ${shuffledOptions.map((opt, i) => {
+                                const colorClasses = ['answer-color-green','answer-color-blue','answer-color-red','answer-color-yellow'];
+                                const colorClass = colorClasses[i] || colorClasses[colorClasses.length - 1];
+                                return `
+                                    <button onclick="handleAnswer(this, '${opt.replace(/'/g, "\\'")}', '${q.correct.replace(/'/g, "\\'")}')" 
+                                            class="option-btn text-right p-5 rounded-2xl text-xl font-bold text-gray-700 shadow-sm">
+                                        <div class="flex items-center gap-3">
+                                            <span class="color-strip ${colorClass}"></span>
+                                            <span class="flex-1 text-right">${opt}</span>
+                                        </div>
+                                    </button>
+                                `;
+                            }).join('')}
                         </div>
+                    </div>
+                    <div class="w-full max-w-5xl px-4 mt-6 flex justify-between">
+                        <button onclick="navigateRelative(-1)" class="bg-white/80 text-gray-700 px-6 py-3 rounded-2xl text-base font-bold shadow-sm border border-gray-200">
+                            שאלה קודמת
+                        </button>
+                        <button onclick="navigateRelative(1)" class="bg-purple-600 text-white px-6 py-3 rounded-2xl text-base font-bold shadow-md hover:bg-purple-700 transition-colors">
+                            שאלה הבאה
+                        </button>
                     </div>
                 `;
                 container.appendChild(slide);
@@ -277,6 +350,11 @@
 
         function startTimer(idx) {
             if (timerTween) timerTween.kill();
+            // התחלת צליל הטיימר
+            try {
+                tickSound.currentTime = 0;
+                tickSound.play();
+            } catch (e) {}
             const bar = document.getElementById(`timer-progress-${idx}`);
             const text = document.getElementById(`timer-text-${idx}`);
             if (!bar) return;
@@ -298,10 +376,14 @@
 
         function stopTimer() {
             if (timerTween) timerTween.kill();
+            // עצירת צליל הטיימר
+            tickSound.pause();
+            tickSound.currentTime = 0;
         }
 
         function handleTimeOut() {
             if (isProcessing) return;
+            stopTimer();
             isProcessing = true;
             const fbContent = document.getElementById('feedback-content');
             const fbIcon = document.getElementById('feedback-icon');
@@ -340,15 +422,28 @@
             showSlide(currentSlideIndex);
         }
 
+        function navigateRelative(delta) {
+            if (isProcessing) return;
+            const targetIndex = currentSlideIndex + delta;
+            if (targetIndex < 0 || targetIndex >= questions.length) return;
+            currentSlideIndex = targetIndex;
+            showSlide(currentSlideIndex);
+        }
+
         function handleAnswer(btn, selected, correct) {
             if (isProcessing) return;
             isProcessing = true;
-            stopTimer();
             const fbContent = document.getElementById('feedback-content');
             const fbIcon = document.getElementById('feedback-icon');
             const fbText = document.getElementById('feedback-text');
 
             if (selected === correct) {
+                stopTimer();
+                // צליל הצלחה
+                try {
+                    successSound.currentTime = 0;
+                    successSound.play();
+                } catch (e) {}
                 btn.classList.add('correct-answer');
                 fbIcon.innerText = '⭐';
                 fbText.innerText = 'מצוין!';
@@ -359,6 +454,11 @@
                     setTimeout(() => { hideFeedback(() => { isProcessing = false; nextSlide(); }); }, 1000);
                 }, 300);
             } else {
+                // צליל טעות
+                try {
+                    wrongSound.currentTime = 0;
+                    wrongSound.play();
+                } catch (e) {}
                 btn.classList.add('wrong-answer');
                 gsap.to(btn, { x: 10, repeat: 5, yoyo: true, duration: 0.05 });
                 fbIcon.innerText = '🌈';
@@ -366,7 +466,14 @@
                 fbContent.className = 'text-white text-center p-12 rounded-[3rem] transform scale-50 opacity-0 shadow-2xl bg-rose-500';
                 setTimeout(() => {
                     showFeedback();
-                    setTimeout(() => { hideFeedback(() => { btn.classList.remove('wrong-answer'); isProcessing = false; startTimer(currentSlideIndex); }); }, 1200);
+                    setTimeout(() => { 
+                        hideFeedback(() => { 
+                            btn.classList.remove('wrong-answer');
+                            btn.classList.add('disabled-option');
+                            btn.disabled = true;
+                            isProcessing = false; 
+                        }); 
+                    }, 1200);
                 }, 300);
             }
         }
